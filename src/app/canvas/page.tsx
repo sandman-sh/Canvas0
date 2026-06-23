@@ -186,7 +186,7 @@ export default function CanvasPage() {
     }
 
     // Initial asset load
-    getAssets().then(setAssets).catch((err) => {
+    getAssets(activeWorkspace).then(setAssets).catch((err) => {
       addToast('Fetch Failed', 'Failed to retrieve assets from Supabase database.', 'error');
     });
 
@@ -197,6 +197,11 @@ export default function CanvasPage() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'canvas_assets' },
         (payload) => {
+          const payloadAsset = (payload.new || payload.old) as CanvasAsset;
+          if (payloadAsset && payloadAsset.room_id !== activeWorkspace) {
+            return; // Ignore updates from other rooms
+          }
+
           if (payload.eventType === 'INSERT') {
             const newAsset = payload.new as CanvasAsset;
             setAssets((prev) => {
@@ -328,7 +333,7 @@ export default function CanvasPage() {
   // Add Asset Handlers
   const handleAddAsset = async (asset: Omit<CanvasAsset, 'id'>) => {
     try {
-      const added = await addAsset(asset);
+      const added = await addAsset(asset, workspace);
       setAssets((prev) => [...prev, added]);
       return added;
     } catch (e: any) {
@@ -598,6 +603,7 @@ export default function CanvasPage() {
       <AIChatPanel
         walletAddress={walletAddress}
         collaboratorName={collaboratorName}
+        workspace={workspace}
         isOpen={isAIChatOpen}
         onClose={() => setIsAIChatOpen(false)}
         onAssetGenerated={(newAsset) => {

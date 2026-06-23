@@ -69,6 +69,7 @@ export interface CanvasAsset {
   z_index: number;
   properties: ObjectProperties;
   creator_id: string;
+  room_id?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -83,11 +84,12 @@ export interface UserCursor {
   lastActive: number;
 }
 
-// Fetch all assets from canvas_assets
-export async function getAssets(): Promise<CanvasAsset[]> {
+// Fetch all assets from canvas_assets by room
+export async function getAssets(roomId: string): Promise<CanvasAsset[]> {
   const { data, error } = await supabase
     .from('canvas_assets')
     .select('*')
+    .eq('room_id', roomId)
     .order('z_index', { ascending: true });
 
   if (error) {
@@ -98,10 +100,10 @@ export async function getAssets(): Promise<CanvasAsset[]> {
 }
 
 // Add a new asset to the canvas
-export async function addAsset(asset: Omit<CanvasAsset, 'id'>): Promise<CanvasAsset> {
+export async function addAsset(asset: Omit<CanvasAsset, 'id'>, roomId: string): Promise<CanvasAsset> {
   const { data, error } = await supabase
     .from('canvas_assets')
-    .insert([asset])
+    .insert([{ ...asset, room_id: roomId }])
     .select()
     .single();
 

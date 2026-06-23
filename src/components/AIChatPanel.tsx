@@ -9,6 +9,7 @@ import { addAsset, CanvasAsset } from '@/lib/supabase';
 interface AIChatPanelProps {
   walletAddress: string;
   collaboratorName?: string;
+  workspace: string;
   isOpen: boolean;
   onClose: () => void;
   onAssetGenerated: (asset: CanvasAsset) => void;
@@ -18,6 +19,7 @@ interface AIChatPanelProps {
 export default function AIChatPanel({
   walletAddress,
   collaboratorName,
+  workspace,
   isOpen,
   onClose,
   onAssetGenerated,
@@ -72,7 +74,7 @@ export default function AIChatPanel({
           shadowColor: 'transparent',
           shadowBlur: 0
         }
-      });
+      }, workspace);
 
       // Provenance hash
       const promptHashRaw = prompt.toLowerCase().trim();
