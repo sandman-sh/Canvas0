@@ -68,8 +68,12 @@ export default function Home() {
       return;
     }
     localStorage.setItem('canvas0_username', name.trim());
-    localStorage.setItem('canvas0_workspace', workspace.trim());
-    router.push(`/canvas?room=${encodeURIComponent(workspace.trim())}`);
+    
+    // Auto-generate a unique private room ID if not joining an existing room
+    const targetRoom = isUrlRoom ? workspace.trim() : 'room-' + Math.random().toString(36).substring(2, 9);
+    localStorage.setItem('canvas0_workspace', targetRoom);
+    
+    router.push(`/canvas?room=${encodeURIComponent(targetRoom)}`);
   };
 
   const disconnectWallet = () => {
@@ -220,48 +224,17 @@ export default function Home() {
               )}
             </div>
 
-            {/* Room / Workspace Section */}
-            <div className="flex flex-col gap-1.5 border-t border-zinc-200 pt-3">
-              <div className="flex items-center justify-between">
-                <label htmlFor="workspace" className="text-xs font-black uppercase text-zinc-700">
-                  Canvas Room ID
-                </label>
-                {isUrlRoom && (
-                  <span className="text-[9px] font-black uppercase bg-brand-yellow px-1.5 py-0.5 neo-border-sm">
-                    Via Invite Link
-                  </span>
-                )}
+            {/* Room / Workspace Section (Only show locked label if joining via invite link) */}
+            {isUrlRoom && (
+              <div className="flex flex-col gap-1 border-t border-zinc-200 pt-3 bg-zinc-50 p-3 neo-border-sm">
+                <span className="text-[10px] font-black uppercase text-zinc-500">
+                  Joining Private Shared Room
+                </span>
+                <span className="text-sm font-black text-brand-purple uppercase select-all">
+                  {workspace}
+                </span>
               </div>
-              
-              <div className="flex gap-2">
-                <input
-                  id="workspace"
-                  type="text"
-                  required
-                  disabled={isUrlRoom}
-                  value={workspace}
-                  onChange={(e) => setWorkspace(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
-                  placeholder="e.g. main-hq"
-                  className="flex-1 neo-border p-3 font-bold text-sm bg-white focus:outline-none focus:bg-yellow-50 focus:ring-2 focus:ring-brand-purple disabled:bg-zinc-100 disabled:cursor-not-allowed"
-                />
-                {!isUrlRoom && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const randRoom = 'room-' + Math.random().toString(36).substring(2, 9);
-                      setWorkspace(randRoom);
-                    }}
-                    className="neo-btn bg-brand-yellow px-3 text-xs font-black uppercase tracking-wide cursor-pointer"
-                    title="Generate Random Room ID"
-                  >
-                    Random
-                  </button>
-                )}
-              </div>
-              <p className="text-[10px] text-zinc-500 font-bold uppercase mt-0.5">
-                Alphanumeric characters, hyphens, and underscores only.
-              </p>
-            </div>
+            )}
 
             <button
               type="submit"

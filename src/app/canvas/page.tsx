@@ -137,12 +137,14 @@ export default function CanvasPage() {
     // 1. Read room query parameter
     const params = new URLSearchParams(window.location.search);
     const roomParam = params.get('room');
-    let activeWorkspace = 'main-hq';
+    let activeWorkspace = '';
     if (roomParam) {
       activeWorkspace = roomParam;
       localStorage.setItem('canvas0_workspace', roomParam);
     } else {
-      activeWorkspace = localStorage.getItem('canvas0_workspace') || 'main-hq';
+      const randRoom = 'room-' + Math.random().toString(36).substring(2, 9);
+      router.push(`/canvas?room=${encodeURIComponent(randRoom)}`);
+      return;
     }
     setWorkspace(activeWorkspace);
 
@@ -437,13 +439,9 @@ export default function CanvasPage() {
           </button>
 
           <div className="relative flex items-center gap-2">
-            <button
-              onClick={() => setShowWorkspaceMenu(!showWorkspaceMenu)}
-              className="px-3 py-1.5 bg-brand-yellow neo-border-sm font-bold text-xs uppercase flex items-center gap-1.5 cursor-pointer"
-            >
+            <div className="px-3 py-1.5 bg-brand-yellow neo-border-sm font-bold text-xs uppercase flex items-center gap-1.5 select-none">
               <span>Room: {workspace}</span>
-              <ChevronDown className="w-3.5 h-3.5" />
-            </button>
+            </div>
 
             <button
               onClick={() => {
@@ -467,27 +465,6 @@ export default function CanvasPage() {
               <Database className="w-3.5 h-3.5" />
               <span>{backingUp ? 'Saving...' : 'Backup'}</span>
             </button>
-            
-            {showWorkspaceMenu && (
-              <div className="absolute top-10 left-0 bg-white neo-border shadow-[4px_4px_0px_#000] p-2 flex flex-col gap-1 w-44 z-50">
-                {['main-hq', 'sandbox', 'galileo-dev'].map((room) => (
-                  <button
-                    key={room}
-                    onClick={() => {
-                      setWorkspace(room);
-                      localStorage.setItem('canvas0_workspace', room);
-                      setShowWorkspaceMenu(false);
-                      window.location.href = `/canvas?room=${encodeURIComponent(room)}`;
-                    }}
-                    className={`text-left px-2 py-1 text-xs font-bold uppercase hover:bg-zinc-100 ${
-                      workspace === room ? 'bg-brand-purple/10 text-brand-purple' : ''
-                    }`}
-                  >
-                    {room}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
