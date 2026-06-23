@@ -206,7 +206,7 @@ export default function Inspector({ selectedAsset, onUpdateProperties, onDeleteA
         </span>
 
         {/* Fill Color */}
-        {(selectedAsset.type === 'rect' || selectedAsset.type === 'ellipse' || selectedAsset.type === 'text') && (
+        {(selectedAsset.type === 'rect' || selectedAsset.type === 'ellipse' || selectedAsset.type === 'text' || selectedAsset.type === 'path') && (
           <div>
             <label className="block text-[10px] font-bold text-zinc-600 uppercase mb-1">Fill Color</label>
             <div className="flex gap-1.5">

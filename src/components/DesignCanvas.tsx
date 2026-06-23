@@ -715,6 +715,35 @@ void main() {
     fCanvas.renderAll();
   }, [selectedAsset]);
 
+  // Sync selectedAsset from parent state to Fabric Canvas active selection
+  useEffect(() => {
+    const fCanvas = fabricCanvasRef.current;
+    if (!fCanvas) return;
+
+    const activeObj = fCanvas.getActiveObject();
+    
+    if (!selectedAsset) {
+      if (activeObj) {
+        fCanvas.discardActiveObject();
+        fCanvas.renderAll();
+      }
+      return;
+    }
+
+    if (activeObj && (activeObj as any).data?.id === selectedAsset.id) {
+      return;
+    }
+
+    const targetObj = fCanvas.getObjects().find((o: any) => o.data?.id === selectedAsset.id);
+    if (targetObj) {
+      const originalSelectable = targetObj.selectable;
+      targetObj.selectable = true;
+      fCanvas.setActiveObject(targetObj);
+      targetObj.selectable = originalSelectable;
+      fCanvas.renderAll();
+    }
+  }, [selectedAsset]);
+
   // Handle Zoom change programmatically
   useEffect(() => {
     const fCanvas = fabricCanvasRef.current;
