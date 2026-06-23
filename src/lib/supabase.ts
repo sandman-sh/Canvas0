@@ -1,0 +1,144 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables in client configuration.');
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Universal object properties stored as JSONB
+export interface ObjectProperties {
+  // Appearance
+  opacity?: number;           // 0.0 to 1.0
+  blendMode?: string;         // CSS mix-blend-mode
+  // Border/Stroke
+  strokeColor?: string;
+  strokeWidth?: number;
+  strokeDashArray?: number[];
+  // Shadow
+  shadowX?: number;
+  shadowY?: number;
+  shadowBlur?: number;
+  shadowSpread?: number;
+  shadowColor?: string;
+  // Constraints
+  lockAspectRatio?: boolean;
+  lockMovement?: boolean;
+  hidden?: boolean;
+  // Fill
+  fill?: string;
+  // Corner radius (shapes)
+  cornerRadius?: number;
+  // Text properties
+  fontFamily?: string;
+  fontWeight?: string;
+  fontSize?: number;
+  lineHeight?: number;
+  letterSpacing?: number;
+  textAlign?: string;         // left, center, right, justify
+  textFill?: string;
+  // Image properties
+  imageUrl?: string;
+  sizingMode?: string;        // fill, fit, crop, tile
+  brightness?: number;
+  contrast?: number;
+  saturation?: number;
+  grayscale?: boolean;
+  invert?: boolean;
+  sepia?: boolean;
+  // Shader properties
+  shaderType?: string;        // fragment, vertex
+  shaderSource?: string;      // GLSL code
+  uniforms?: Record<string, number>;
+  // Pen/Path data
+  pathData?: string;          // SVG path d attribute
+}
+
+export interface CanvasAsset {
+  id: string;
+  type: 'text' | 'image' | 'rect' | 'ellipse' | 'line' | 'path' | 'shader';
+  content: string;
+  x_pos: number;
+  y_pos: number;
+  width: number;
+  height: number;
+  rotation: number;
+  z_index: number;
+  properties: ObjectProperties;
+  creator_id: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface UserCursor {
+  userId: string;
+  userName: string;
+  color: string;
+  x: number;
+  y: number;
+  activeTool?: string;
+  lastActive: number;
+}
+
+// Fetch all assets from canvas_assets
+export async function getAssets(): Promise<CanvasAsset[]> {
+  const { data, error } = await supabase
+    .from('canvas_assets')
+    .select('*')
+    .order('z_index', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching assets:', error);
+    throw new Error(error.message || 'Failed to fetch assets');
+  }
+  return data || [];
+}
+
+// Add a new asset to the canvas
+export async function addAsset(asset: Omit<CanvasAsset, 'id'>): Promise<CanvasAsset> {
+  const { data, error } = await supabase
+    .from('canvas_assets')
+    .insert([asset])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error adding asset:', error);
+    throw new Error(error.message || 'Failed to add asset');
+  }
+  return data;
+}
+
+// Update an asset (position, size, rotation, properties, etc.)
+export async function updateAsset(id: string, updates: Partial<CanvasAsset>): Promise<void> {
+  const { error } = await supabase
+    .from('canvas_assets')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error updating asset:', error);
+    throw new Error(error.message || 'Failed to update asset');
+  }
+}
+
+// Update coordinates onDragEnd (legacy compat)
+export async function updateAssetPosition(id: string, x_pos: number, y_pos: number): Promise<void> {
+  return updateAsset(id, { x_pos, y_pos });
+}
+
+// Delete an asset from the canvas
+export async function deleteAsset(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('canvas_assets')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting asset:', error);
+    throw new Error(error.message || 'Failed to delete asset');
+  }
+}
