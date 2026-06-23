@@ -16,7 +16,8 @@ import {
   Users,
   Settings,
   Plus,
-  Database
+  Database,
+  Layers
 } from 'lucide-react';
 import {
   supabase,
@@ -33,6 +34,7 @@ import Toolbar, { ToolType } from '@/components/Toolbar';
 import Inspector from '@/components/Inspector';
 import AIChatPanel from '@/components/AIChatPanel';
 import DesignCanvas from '@/components/DesignCanvas';
+import LayersPanel from '@/components/LayersPanel';
 
 export default function CanvasPage() {
   const router = useRouter();
@@ -67,6 +69,7 @@ export default function CanvasPage() {
   const [cursors, setCursors] = useState<UserCursor[]>([]);
   const [activeUsersCount, setActiveUsersCount] = useState(1);
   const [isAIChatOpen, setIsAIChatOpen] = useState(false);
+  const [isLayersPanelOpen, setIsLayersPanelOpen] = useState(true);
   const [backingUp, setBackingUp] = useState(false);
 
   // Blockchain Provenance logs (assetId -> TxHash info)
@@ -355,6 +358,22 @@ export default function CanvasPage() {
     }
   };
 
+  // Duplicate Asset Handler
+  const handleDuplicateAsset = async (asset: CanvasAsset) => {
+    try {
+      const { id: _id, created_at: _c, updated_at: _u, ...rest } = asset;
+      const duplicated = await addAsset(
+        { ...rest, x_pos: asset.x_pos + 20, y_pos: asset.y_pos + 20, z_index: assets.length + 1 },
+        workspace
+      );
+      setAssets((prev) => [...prev, duplicated]);
+      setSelectedAsset(duplicated);
+      addToast('Duplicated', `${asset.type} duplicated.`, 'success');
+    } catch (e: any) {
+      addToast('Duplicate Failed', e.message || 'Database insert failed.', 'error');
+    }
+  };
+
   // Delete Asset Handler
   const handleDeleteAsset = async (id: string) => {
     try {
@@ -524,6 +543,15 @@ export default function CanvasPage() {
           <div className="pointer-events-auto">
             {/* Quick Environment Controls */}
             <div className="bg-white neo-border shadow-[4px_4px_0px_#000] p-2 flex flex-col gap-2 w-14 items-center">
+              {/* Layers Panel Toggle */}
+              <button
+                onClick={() => setIsLayersPanelOpen(!isLayersPanelOpen)}
+                className={`p-2 neo-border-sm cursor-pointer transition-all ${isLayersPanelOpen ? 'bg-brand-green' : 'hover:bg-zinc-100'}`}
+                title="Toggle Layers Panel"
+              >
+                <Layers className="w-5 h-5 text-black" />
+              </button>
+
               {/* Dots Grid toggle */}
               <button
                 onClick={() => setGridType(gridType === 'dots' ? 'lines' : gridType === 'lines' ? 'none' : 'dots')}
@@ -548,6 +576,18 @@ export default function CanvasPage() {
               </button>
             </div>
           </div>
+
+          {/* Layers Panel (below toolbar) */}
+          {isLayersPanelOpen && (
+            <div className="pointer-events-auto max-h-[40vh]">
+              <LayersPanel
+                assets={assets}
+                selectedAsset={selectedAsset}
+                onSelectAsset={setSelectedAsset}
+                onUpdateAsset={handleUpdateAsset}
+              />
+            </div>
+          )}
         </div>
 
         {/* Center: Infinite Canvas Workspace */}
@@ -590,10 +630,12 @@ export default function CanvasPage() {
           <div className="relative border-l-2 border-black z-30 h-full w-80 flex-shrink-0">
             <Inspector
               selectedAsset={selectedAsset}
+              assets={assets}
               onUpdateProperties={(updates) => {
                 handleUpdateAsset(selectedAsset.id, updates);
               }}
               onDeleteAsset={handleDeleteAsset}
+              onDuplicateAsset={handleDuplicateAsset}
             />
           </div>
         )}

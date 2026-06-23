@@ -16,6 +16,35 @@ import {
 import { CanvasAsset, ObjectProperties, UserCursor } from '@/lib/supabase';
 import { ToolType } from './Toolbar';
 
+// Helper: generate SVG path data for an N-pointed star
+function generateStarPath(cx: number, cy: number, outerR: number, innerR: number, points: number): string {
+  const steps: string[] = [];
+  const total = points * 2;
+  for (let i = 0; i < total; i++) {
+    const angle = (Math.PI / points) * i - Math.PI / 2;
+    const r = i % 2 === 0 ? outerR : innerR;
+    const x = cx + r * Math.cos(angle);
+    const y = cy + r * Math.sin(angle);
+    steps.push(`${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`);
+  }
+  steps.push('Z');
+  return steps.join(' ');
+}
+
+// Helper: generate SVG path data for an arrow line
+function generateArrowPath(w: number, h: number, headType: 'one' | 'both' | 'none'): string {
+  const y = h / 2;
+  const headSize = Math.min(20, w * 0.15);
+  let d = `M 0 ${y} L ${w} ${y}`;
+  if (headType === 'one' || headType === 'both') {
+    d += ` M ${w - headSize} ${y - headSize} L ${w} ${y} L ${w - headSize} ${y + headSize}`;
+  }
+  if (headType === 'both') {
+    d += ` M ${headSize} ${y - headSize} L 0 ${y} L ${headSize} ${y + headSize}`;
+  }
+  return d;
+}
+
 interface DesignCanvasProps {
   assets: CanvasAsset[];
   activeTool: ToolType;
@@ -165,18 +194,17 @@ export default function DesignCanvas({
         return;
       }
 
-      // 3. Quick tool change hotkeys (V, H, R, O, L, T, P, S)
+      // 3. Quick tool change hotkeys
       if (!e.ctrlKey && !e.metaKey && !e.altKey) {
         const key = e.key.toLowerCase();
-        if (key === 'v') onSelectToolRef.current('select');
-        if (key === 'h') onSelectToolRef.current('hand');
-        if (key === 'r') onSelectToolRef.current('rect');
-        if (key === 'o') onSelectToolRef.current('ellipse');
-        if (key === 'l') onSelectToolRef.current('line');
-        if (key === 't') onSelectToolRef.current('text');
-        if (key === 'p') onSelectToolRef.current('pen');
-        if (key === 's') onSelectToolRef.current('shader');
-        if (key === 'a') onSelectToolRef.current('ai');
+        const toolMap: Record<string, ToolType> = {
+          'v': 'select', 'h': 'hand', 'f': 'frame', 'r': 'rect',
+          'o': 'ellipse', 'g': 'star', 'y': 'polygon', 'l': 'line',
+          'w': 'arrow', 't': 'text', 'p': 'pen', 'n': 'sticky',
+          'k': 'comment', 'e': 'eraser', 'i': 'eyedropper',
+          's': 'shader', 'a': 'ai'
+        };
+        if (toolMap[key]) onSelectToolRef.current(toolMap[key]);
       }
     };
 
@@ -284,9 +312,37 @@ export default function DesignCanvas({
         ? `${walletAddressRef.current.slice(0, 6)}...${walletAddressRef.current.slice(-4)}`
         : collaboratorNameRef.current || 'Guest';
 
-      if (['rect', 'ellipse', 'line', 'polygon', 'text', 'shader'].includes(activeToolRef.current)) {
+      // Eraser tool: delete topmost object at click point
+      if (activeToolRef.current === 'eraser') {
+        const target = fCanvas.findTarget(opt.e as any);
+        if (target && (target as any).data?.id) {
+          onDeleteAssetRef.current((target as any).data.id);
+        }
+        return;
+      }
+
+      // Eyedropper tool: pick color from canvas pixel
+      if (activeToolRef.current === 'eyedropper') {
+        try {
+          const ctx = fCanvas.getContext();
+          const rect = (fCanvas as any).lowerCanvasEl?.getBoundingClientRect();
+          if (ctx && rect) {
+            const px = (opt.e as MouseEvent).clientX - rect.left;
+            const py = (opt.e as MouseEvent).clientY - rect.top;
+            const pixel = ctx.getImageData(Math.round(px), Math.round(py), 1, 1).data;
+            const hex = '#' + [pixel[0], pixel[1], pixel[2]].map(c => c.toString(16).padStart(2, '0')).join('');
+            navigator.clipboard.writeText(hex).catch(() => {});
+          }
+        } catch (e) { /* ignore */ }
+        return;
+      }
+
+      // Shape spawning tools
+      const spawnTools = ['rect', 'ellipse', 'line', 'polygon', 'text', 'shader', 'frame', 'star', 'arrow', 'sticky', 'comment'];
+      if (spawnTools.includes(activeToolRef.current)) {
         let type: CanvasAsset['type'] = 'rect';
         let content = '';
+        let w = 200, h = 200;
         let properties: ObjectProperties = {
           fill: '#9D4EDD',
           strokeColor: '#cccccc',
@@ -298,17 +354,41 @@ export default function DesignCanvas({
           opacity: 1
         };
 
-        if (activeToolRef.current === 'rect') {
+        if (activeToolRef.current === 'frame') {
+          type = 'frame';
+          w = 400; h = 300;
+          properties.fill = '#ffffff';
+          properties.strokeColor = '#9D4EDD';
+          properties.strokeWidth = 2;
+          properties.strokeDashArray = [6, 4];
+          properties.strokeDashPreset = 'dashed';
+          properties.clipContent = true;
+          properties.cornerRadius = 8;
+          content = 'Frame';
+        } else if (activeToolRef.current === 'rect') {
           type = 'rect';
           properties.fill = '#9D4EDD';
         } else if (activeToolRef.current === 'ellipse') {
           type = 'ellipse';
           properties.fill = '#FFD60A';
+        } else if (activeToolRef.current === 'star') {
+          type = 'star';
+          properties.fill = '#FF6B00';
+          properties.starPoints = 5;
+          properties.starInnerRadius = 0.4;
+          properties.pathData = generateStarPath(100, 100, 100, 40, 5);
         } else if (activeToolRef.current === 'line') {
           type = 'line';
           properties.strokeColor = '#FF007F';
           properties.strokeWidth = 3;
           properties.fill = 'transparent';
+        } else if (activeToolRef.current === 'arrow') {
+          type = 'arrow';
+          properties.strokeColor = '#FF007F';
+          properties.strokeWidth = 3;
+          properties.fill = 'transparent';
+          properties.arrowHead = 'one';
+          properties.pathData = generateArrowPath(200, 200, 'one');
         } else if (activeToolRef.current === 'polygon') {
           type = 'path';
           properties.fill = '#39FF14';
@@ -320,6 +400,26 @@ export default function DesignCanvas({
           properties.fontSize = 24;
           properties.fontFamily = 'Inter';
           properties.fontWeight = 'normal';
+        } else if (activeToolRef.current === 'sticky') {
+          type = 'sticky';
+          w = 200; h = 200;
+          content = 'Note...';
+          properties.fill = '#FFD60A';
+          properties.stickyColor = '#FFD60A';
+          properties.cornerRadius = 4;
+          properties.shadowX = 3;
+          properties.shadowY = 3;
+          properties.shadowBlur = 8;
+          properties.shadowColor = 'rgba(0,0,0,0.2)';
+          properties.fontSize = 16;
+          properties.fontFamily = 'Inter';
+        } else if (activeToolRef.current === 'comment') {
+          type = 'comment';
+          w = 36; h = 36;
+          content = '';
+          properties.fill = '#FF007F';
+          properties.commentText = '';
+          properties.commentAuthor = creatorShort;
         } else if (activeToolRef.current === 'shader') {
           type = 'shader';
           content = 'GLSL Shader Node';
@@ -337,10 +437,10 @@ void main() {
         onAddAssetRef.current({
           type,
           content,
-          x_pos: Math.round(pointer.x - 100),
-          y_pos: Math.round(pointer.y - 100),
-          width: 200,
-          height: 200,
+          x_pos: Math.round(pointer.x - w / 2),
+          y_pos: Math.round(pointer.y - h / 2),
+          width: w,
+          height: h,
           rotation: 0,
           z_index: assetsRef.current.length + 1,
           properties,
@@ -672,6 +772,43 @@ void main() {
           obj = new FabricImage(canvasEl, {
             ...baseOpts,
           });
+        } else if (asset.type === 'frame') {
+          obj = new Rect({
+            ...baseOpts,
+            fill: props.fill || '#ffffff',
+            rx: props.cornerRadius || 8,
+            ry: props.cornerRadius || 8,
+            strokeDashArray: props.strokeDashArray || [6, 4],
+          });
+        } else if (asset.type === 'star') {
+          const starPath = props.pathData || generateStarPath(100, 100, 100, 40, props.starPoints || 5);
+          obj = new Path(starPath, {
+            ...baseOpts,
+            fill: props.fill || '#FF6B00',
+          });
+        } else if (asset.type === 'arrow') {
+          const arrowPath = props.pathData || generateArrowPath(asset.width, asset.height, props.arrowHead || 'one');
+          obj = new Path(arrowPath, {
+            ...baseOpts,
+            fill: 'transparent',
+            stroke: props.strokeColor || '#FF007F',
+            strokeWidth: props.strokeWidth !== undefined ? props.strokeWidth : 3,
+          });
+        } else if (asset.type === 'sticky') {
+          obj = new Rect({
+            ...baseOpts,
+            fill: props.fill || props.stickyColor || '#FFD60A',
+            rx: props.cornerRadius || 4,
+            ry: props.cornerRadius || 4,
+          });
+        } else if (asset.type === 'comment') {
+          const { width: _cw, height: _ch, ...commentOpts } = baseOpts;
+          obj = new Ellipse({
+            ...commentOpts,
+            rx: asset.width / 2,
+            ry: asset.height / 2,
+            fill: props.fill || '#FF007F',
+          });
         }
 
         if (obj) {
@@ -691,6 +828,8 @@ void main() {
           stroke: strokeVal,
           strokeWidth: strokeWidthVal,
           fill: props.fill || 'transparent',
+          strokeDashArray: props.strokeDashArray || null,
+          data: { id: asset.id, properties: props },
           shadow: props.shadowColor && props.shadowColor !== 'transparent' && (props.shadowX || props.shadowY || props.shadowBlur)
             ? new Shadow({
                 color: props.shadowColor,
@@ -700,6 +839,11 @@ void main() {
               })
             : null,
         });
+
+        // Update corner radius for rect/frame/sticky
+        if (obj instanceof Rect && props.cornerRadius !== undefined) {
+          obj.set({ rx: props.cornerRadius, ry: props.cornerRadius });
+        }
 
         if (obj.width && obj.height) {
           obj.set({

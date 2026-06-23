@@ -17,7 +17,8 @@ export interface ObjectProperties {
   // Border/Stroke
   strokeColor?: string;
   strokeWidth?: number;
-  strokeDashArray?: number[];
+  strokeDashArray?: number[]; // e.g. [5,5] for dashed, [2,2] for dotted
+  strokeDashPreset?: string;  // 'solid' | 'dashed' | 'dotted' | 'dashdot'
   // Shadow
   shadowX?: number;
   shadowY?: number;
@@ -30,6 +31,11 @@ export interface ObjectProperties {
   hidden?: boolean;
   // Fill
   fill?: string;
+  // Gradient Fill
+  gradientEnabled?: boolean;
+  gradientStart?: string;
+  gradientEnd?: string;
+  gradientAngle?: number;     // 0=top-bottom, 90=left-right, etc.
   // Corner radius (shapes)
   cornerRadius?: number;
   // Text properties
@@ -55,11 +61,23 @@ export interface ObjectProperties {
   uniforms?: Record<string, number>;
   // Pen/Path data
   pathData?: string;          // SVG path d attribute
+  // Frame/Container properties
+  clipContent?: boolean;      // overflow hidden when true
+  // Star properties
+  starPoints?: number;        // number of points (3-12)
+  starInnerRadius?: number;   // inner radius ratio (0.1-0.9)
+  // Arrow properties
+  arrowHead?: 'one' | 'both' | 'none';
+  // Sticky Note properties
+  stickyColor?: string;       // preset sticky note color
+  // Comment properties
+  commentText?: string;
+  commentAuthor?: string;
 }
 
 export interface CanvasAsset {
   id: string;
-  type: 'text' | 'image' | 'rect' | 'ellipse' | 'line' | 'path' | 'shader';
+  type: 'text' | 'image' | 'rect' | 'ellipse' | 'line' | 'path' | 'shader' | 'frame' | 'star' | 'arrow' | 'sticky' | 'comment';
   content: string;
   x_pos: number;
   y_pos: number;
@@ -69,6 +87,7 @@ export interface CanvasAsset {
   z_index: number;
   properties: ObjectProperties;
   creator_id: string;
+  parent_id?: string | null;
   room_id?: string;
   created_at?: string;
   updated_at?: string;
