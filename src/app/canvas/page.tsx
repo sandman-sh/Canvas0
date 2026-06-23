@@ -35,6 +35,7 @@ import Inspector from '@/components/Inspector';
 import AIChatPanel from '@/components/AIChatPanel';
 import DesignCanvas from '@/components/DesignCanvas';
 import LayersPanel from '@/components/LayersPanel';
+import ExportModal from '@/components/ExportModal';
 
 export default function CanvasPage() {
   const router = useRouter();
@@ -70,7 +71,9 @@ export default function CanvasPage() {
   const [activeUsersCount, setActiveUsersCount] = useState(1);
   const [isAIChatOpen, setIsAIChatOpen] = useState(false);
   const [isLayersPanelOpen, setIsLayersPanelOpen] = useState(true);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
+  const canvasExportRef = useRef<any>(null);
 
   // Blockchain Provenance logs (assetId -> TxHash info)
   const [provenanceLogs, setProvenanceLogs] = useState<Record<string, { txHash: string; simulated: boolean }>>({});
@@ -289,6 +292,127 @@ export default function CanvasPage() {
     };
   }, [userId, collaboratorName, workspace, cursorColor]);
 
+  // Auto-Layout Engine (Flexbox & Grid alignment solver)
+  useEffect(() => {
+    if (assets.length === 0) return;
+
+    const containers = assets.filter(a => a.type === 'flexbox' || a.type === 'grid');
+    if (containers.length === 0) return;
+
+    let hasChanges = false;
+    const batchUpdates: Record<string, Partial<CanvasAsset>> = {};
+
+    containers.forEach(parent => {
+      const children = assets.filter(c => c.parent_id === parent.id)
+        .sort((a, b) => {
+          if (parent.type === 'flexbox') {
+            const dir = parent.properties.flexDirection || 'row';
+            return dir === 'row' ? a.x_pos - b.x_pos : a.y_pos - b.y_pos;
+          }
+          return a.z_index - b.z_index;
+        });
+
+      if (children.length === 0) return;
+
+      const p = parent.properties.padding ?? 8;
+      const gap = parent.properties.flexGap ?? parent.properties.gridGap ?? 8;
+
+      if (parent.type === 'flexbox') {
+        const dir = parent.properties.flexDirection || 'row';
+        const align = parent.properties.alignItems || 'start';
+
+        if (dir === 'column') {
+          let currentY = parent.y_pos + p;
+          children.forEach(child => {
+            let targetX = child.x_pos;
+            if (align === 'start') targetX = parent.x_pos + p;
+            else if (align === 'center') targetX = parent.x_pos + (parent.width - child.width) / 2;
+            else if (align === 'end') targetX = parent.x_pos + parent.width - child.width - p;
+            else if (align === 'stretch') {
+              targetX = parent.x_pos + p;
+              const targetW = parent.width - 2 * p;
+              if (child.width !== targetW) {
+                batchUpdates[child.id] = { ...batchUpdates[child.id], width: targetW };
+                hasChanges = true;
+              }
+            }
+
+            if (Math.round(child.y_pos) !== Math.round(currentY) || Math.round(child.x_pos) !== Math.round(targetX)) {
+              batchUpdates[child.id] = {
+                ...batchUpdates[child.id],
+                x_pos: Math.round(targetX),
+                y_pos: Math.round(currentY)
+              };
+              hasChanges = true;
+            }
+            currentY += child.height + gap;
+          });
+        } else { // row
+          let currentX = parent.x_pos + p;
+          children.forEach(child => {
+            let targetY = child.y_pos;
+            if (align === 'start') targetY = parent.y_pos + p;
+            else if (align === 'center') targetY = parent.y_pos + (parent.height - child.height) / 2;
+            else if (align === 'end') targetY = parent.y_pos + parent.height - child.height - p;
+            else if (align === 'stretch') {
+              targetY = parent.y_pos + p;
+              const targetH = parent.height - 2 * p;
+              if (child.height !== targetH) {
+                batchUpdates[child.id] = { ...batchUpdates[child.id], height: targetH };
+                hasChanges = true;
+              }
+            }
+
+            if (Math.round(child.x_pos) !== Math.round(currentX) || Math.round(child.y_pos) !== Math.round(targetY)) {
+              batchUpdates[child.id] = {
+                ...batchUpdates[child.id],
+                x_pos: Math.round(currentX),
+                y_pos: Math.round(targetY)
+              };
+              hasChanges = true;
+            }
+            currentX += child.width + gap;
+          });
+        }
+      } else if (parent.type === 'grid') {
+        const cols = parent.properties.gridCols ?? 2;
+        const rows = Math.ceil(children.length / cols);
+        const cellWidth = Math.round((parent.width - 2 * p - (cols - 1) * gap) / cols);
+        const cellHeight = Math.round((parent.height - 2 * p - (rows - 1) * gap) / Math.max(1, rows));
+
+        children.forEach((child, idx) => {
+          const row = Math.floor(idx / cols);
+          const col = idx % cols;
+          const targetX = parent.x_pos + p + col * (cellWidth + gap);
+          const targetY = parent.y_pos + p + row * (cellHeight + gap);
+
+          if (
+            Math.round(child.x_pos) !== Math.round(targetX) ||
+            Math.round(child.y_pos) !== Math.round(targetY) ||
+            Math.round(child.width) !== Math.round(cellWidth) ||
+            Math.round(child.height) !== Math.round(cellHeight)
+          ) {
+            batchUpdates[child.id] = {
+              ...batchUpdates[child.id],
+              x_pos: Math.round(targetX),
+              y_pos: Math.round(targetY),
+              width: Math.round(cellWidth),
+              height: Math.round(cellHeight)
+            };
+            hasChanges = true;
+          }
+        });
+      }
+    });
+
+    if (hasChanges) {
+      setAssets(prev => prev.map(a => batchUpdates[a.id] ? { ...a, ...batchUpdates[a.id] } as CanvasAsset : a));
+      Object.entries(batchUpdates).forEach(([id, updates]) => {
+        updateAsset(id, updates);
+      });
+    }
+  }, [assets]);
+
   // Track coordinates and broadcast via Presence
   const handleTrackCursor = (x: number, y: number) => {
     const now = Date.now();
@@ -437,6 +561,46 @@ export default function CanvasPage() {
     reader.readAsDataURL(file);
   };
 
+  // Export canvas or selection handler
+  const handleExport = (options: {
+    format: 'png' | 'jpeg' | 'svg' | 'json';
+    scope: 'all' | 'selected';
+    multiplier: number;
+    transparent: boolean;
+  }) => {
+    if (!canvasExportRef.current) return;
+    const data = canvasExportRef.current.exportToFormat(options);
+    if (!data) {
+      addToast('Export Failed', 'Unable to retrieve canvas data for export.', 'error');
+      return;
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `canvas0-design-${timestamp}`;
+
+    if (options.format === 'json') {
+      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(data, null, 2))}`;
+      const link = document.createElement('a');
+      link.href = jsonString;
+      link.download = `${filename}.json`;
+      link.click();
+    } else if (options.format === 'svg') {
+      const svgString = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(data as string)}`;
+      const link = document.createElement('a');
+      link.href = svgString;
+      link.download = `${filename}.svg`;
+      link.click();
+    } else {
+      // PNG / JPEG
+      const link = document.createElement('a');
+      link.href = data as string;
+      link.download = `${filename}.${options.format}`;
+      link.click();
+    }
+
+    addToast('Export Success', `Exported canvas layout as ${options.format.toUpperCase()}`, 'success');
+  };
+
   if (!mounted) return null;
 
   return (
@@ -536,6 +700,7 @@ export default function CanvasPage() {
               onChangeTool={setActiveTool}
               onUploadClick={triggerImageUpload}
               onAIClick={() => setIsAIChatOpen(!isAIChatOpen)}
+              onExportClick={() => setIsExportModalOpen(true)}
               isAIChatOpen={isAIChatOpen}
             />
           </div>
@@ -622,6 +787,7 @@ export default function CanvasPage() {
             gridType={gridType}
             gridSize={gridSize}
             canvasBg={canvasBg}
+            exportRef={canvasExportRef}
           />
         </div>
 
@@ -739,6 +905,13 @@ export default function CanvasPage() {
           </div>
         ))}
       </div>
+      {/* Export Selection & Design Modal */}
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        onExport={handleExport}
+        hasSelection={selectedAsset !== null}
+      />
     </div>
   );
 }

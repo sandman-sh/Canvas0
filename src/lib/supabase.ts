@@ -73,11 +73,19 @@ export interface ObjectProperties {
   // Comment properties
   commentText?: string;
   commentAuthor?: string;
+  // Layout properties
+  layoutType?: 'none' | 'flex' | 'grid';
+  flexDirection?: 'row' | 'column';
+  flexGap?: number;
+  alignItems?: 'start' | 'center' | 'end' | 'stretch';
+  gridCols?: number;
+  gridGap?: number;
+  padding?: number;
 }
 
 export interface CanvasAsset {
   id: string;
-  type: 'text' | 'image' | 'rect' | 'ellipse' | 'line' | 'path' | 'shader' | 'frame' | 'star' | 'arrow' | 'sticky' | 'comment';
+  type: 'text' | 'image' | 'rect' | 'ellipse' | 'line' | 'path' | 'shader' | 'frame' | 'star' | 'arrow' | 'sticky' | 'comment' | 'container' | 'flexbox' | 'grid';
   content: string;
   x_pos: number;
   y_pos: number;

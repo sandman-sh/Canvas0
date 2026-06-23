@@ -64,6 +64,7 @@ interface DesignCanvasProps {
   gridType: 'dots' | 'lines' | 'none';
   gridSize: number;
   canvasBg: string;
+  exportRef?: React.MutableRefObject<any>;
 }
 
 export default function DesignCanvas({
@@ -84,7 +85,8 @@ export default function DesignCanvas({
   onZoomChange,
   gridType,
   gridSize,
-  canvasBg
+  canvasBg,
+  exportRef
 }: DesignCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -275,6 +277,8 @@ export default function DesignCanvas({
       if (!obj || !obj.data?.id) return;
 
       const id = obj.data.id;
+      const parentAsset = assetsRef.current.find(a => a.id === id);
+
       const updates: Partial<CanvasAsset> = {
         x_pos: Math.round(obj.left || 0),
         y_pos: Math.round(obj.top || 0),
@@ -288,6 +292,56 @@ export default function DesignCanvas({
       };
 
       onUpdateAssetRef.current(id, updates);
+
+      // Parent Drag Propagation
+      if (parentAsset) {
+        const isContainer = ['frame', 'container', 'flexbox', 'grid'].includes(parentAsset.type);
+        if (isContainer) {
+          const dx = Math.round(obj.left || 0) - parentAsset.x_pos;
+          const dy = Math.round(obj.top || 0) - parentAsset.y_pos;
+          if (dx !== 0 || dy !== 0) {
+            const children = assetsRef.current.filter(c => c.parent_id === id);
+            children.forEach(child => {
+              onUpdateAssetRef.current(child.id, {
+                x_pos: child.x_pos + dx,
+                y_pos: child.y_pos + dy
+              });
+            });
+          }
+        }
+      }
+    });
+
+    // Object Moving Handler (Visual sync of nested child objects in real-time)
+    fCanvas.on('object:moving', (e) => {
+      const obj = e.target as any;
+      if (!obj || !obj.data?.id) return;
+
+      const id = obj.data.id;
+      const parentAsset = assetsRef.current.find(a => a.id === id);
+      if (!parentAsset) return;
+
+      const isContainer = ['frame', 'container', 'flexbox', 'grid'].includes(parentAsset.type);
+      if (!isContainer) return;
+
+      const dx = (obj.left || 0) - parentAsset.x_pos;
+      const dy = (obj.top || 0) - parentAsset.y_pos;
+
+      if (dx === 0 && dy === 0) return;
+
+      fCanvas.getObjects().forEach((o: any) => {
+        if (o.data?.id && o.data.id !== id) {
+          const childAsset = assetsRef.current.find(c => c.id === o.data.id);
+          if (childAsset && childAsset.parent_id === id) {
+            o.set({
+              left: childAsset.x_pos + dx,
+              top: childAsset.y_pos + dy
+            });
+            o.setCoords();
+          }
+        }
+      });
+      fCanvas.renderAll();
     });
 
     // Cursor tracking / Mouse down drawing / Panning
@@ -338,7 +392,7 @@ export default function DesignCanvas({
       }
 
       // Shape spawning tools
-      const spawnTools = ['rect', 'ellipse', 'line', 'polygon', 'text', 'shader', 'frame', 'star', 'arrow', 'sticky', 'comment'];
+      const spawnTools = ['rect', 'ellipse', 'line', 'polygon', 'text', 'shader', 'frame', 'star', 'arrow', 'sticky', 'comment', 'container', 'flexbox', 'grid', 'triangle', 'curve'];
       if (spawnTools.includes(activeToolRef.current)) {
         let type: CanvasAsset['type'] = 'rect';
         let content = '';
@@ -365,6 +419,50 @@ export default function DesignCanvas({
           properties.clipContent = true;
           properties.cornerRadius = 8;
           content = 'Frame';
+        } else if (activeToolRef.current === 'container') {
+          type = 'container';
+          w = 300; h = 200;
+          properties.fill = '#f4f4f5';
+          properties.strokeColor = '#e4e4e7';
+          properties.strokeWidth = 2;
+          properties.clipContent = true;
+          properties.cornerRadius = 6;
+          properties.layoutType = 'none';
+        } else if (activeToolRef.current === 'flexbox') {
+          type = 'flexbox';
+          w = 400; h = 150;
+          properties.fill = '#eff6ff';
+          properties.strokeColor = '#3b82f6';
+          properties.strokeWidth = 2;
+          properties.clipContent = true;
+          properties.cornerRadius = 6;
+          properties.layoutType = 'flex';
+          properties.flexDirection = 'row';
+          properties.flexGap = 8;
+          properties.padding = 8;
+          properties.alignItems = 'center';
+        } else if (activeToolRef.current === 'grid') {
+          type = 'grid';
+          w = 400; h = 300;
+          properties.fill = '#f0fdf4';
+          properties.strokeColor = '#22c55e';
+          properties.strokeWidth = 2;
+          properties.clipContent = true;
+          properties.cornerRadius = 6;
+          properties.layoutType = 'grid';
+          properties.gridCols = 2;
+          properties.gridGap = 8;
+          properties.padding = 8;
+        } else if (activeToolRef.current === 'triangle') {
+          type = 'path';
+          properties.fill = '#FFD60A';
+          properties.pathData = 'M 100 0 L 200 200 L 0 200 Z';
+        } else if (activeToolRef.current === 'curve') {
+          type = 'path';
+          properties.fill = 'transparent';
+          properties.strokeColor = '#FF007F';
+          properties.strokeWidth = 4;
+          properties.pathData = 'M 0 100 Q 100 0 200 100';
         } else if (activeToolRef.current === 'rect') {
           type = 'rect';
           properties.fill = '#9D4EDD';
@@ -713,10 +811,10 @@ void main() {
       };
 
       if (!obj) {
-        if (asset.type === 'rect') {
+        if (asset.type === 'rect' || asset.type === 'container' || asset.type === 'flexbox' || asset.type === 'grid') {
           obj = new Rect({
             ...baseOpts,
-            fill: props.fill || '#39FF14',
+            fill: props.fill || (asset.type === 'flexbox' ? '#eff6ff' : asset.type === 'grid' ? '#f0fdf4' : '#39FF14'),
             rx: props.cornerRadius || 0,
             ry: props.cornerRadius || 0,
           });
@@ -867,6 +965,30 @@ void main() {
           fCanvas.setActiveObject(obj);
         }
       }
+
+      // Overflow clipping overlay if parent has clipContent
+      if (obj) {
+        if (asset.parent_id) {
+          const parentAsset = assetsRef.current.find(a => a.id === asset.parent_id);
+          if (parentAsset && parentAsset.properties?.clipContent) {
+            obj.set({
+              clipPath: new Rect({
+                left: parentAsset.x_pos,
+                top: parentAsset.y_pos,
+                width: parentAsset.width,
+                height: parentAsset.height,
+                rx: parentAsset.properties.cornerRadius || 0,
+                ry: parentAsset.properties.cornerRadius || 0,
+                absolutePositioned: true
+              })
+            });
+          } else {
+            obj.set({ clipPath: undefined });
+          }
+        } else {
+          obj.set({ clipPath: undefined });
+        }
+      }
     });
 
     fCanvas.renderAll();
@@ -939,6 +1061,66 @@ void main() {
       fCanvas.renderAll();
     }
   }, [zoom]);
+
+  // Expose export functions to parent ref
+  useEffect(() => {
+    if (exportRef) {
+      exportRef.current = {
+        exportToFormat: (options: {
+          format: 'png' | 'jpeg' | 'svg' | 'json';
+          scope: 'all' | 'selected';
+          multiplier: number;
+          transparent: boolean;
+        }) => {
+          const fCanvas = fabricCanvasRef.current;
+          if (!fCanvas) return null;
+
+          const originalZoom = fCanvas.getZoom();
+          const originalBg = fCanvas.backgroundColor;
+
+          // Export at 1:1 design scale
+          fCanvas.setZoom(1);
+          if (options.transparent) {
+            fCanvas.backgroundColor = 'transparent';
+          }
+          fCanvas.renderAll();
+
+          let result: any = null;
+
+          if (options.format === 'json') {
+            result = fCanvas.toJSON();
+          } else if (options.format === 'svg') {
+            result = fCanvas.toSVG();
+          } else {
+            // PNG/JPEG
+            const dataUrlOptions: any = {
+              format: options.format,
+              quality: 0.95,
+              multiplier: options.multiplier,
+            };
+
+            if (options.scope === 'selected') {
+              const activeObj = fCanvas.getActiveObject();
+              if (activeObj) {
+                result = activeObj.toDataURL(dataUrlOptions);
+              } else {
+                result = fCanvas.toDataURL(dataUrlOptions);
+              }
+            } else {
+              result = fCanvas.toDataURL(dataUrlOptions);
+            }
+          }
+
+          // Restore original state
+          fCanvas.setZoom(originalZoom);
+          fCanvas.backgroundColor = originalBg;
+          fCanvas.renderAll();
+
+          return result;
+        }
+      };
+    }
+  }, [exportRef, assets]);
 
   return (
     <div ref={containerRef} className="relative w-full h-full overflow-hidden select-none">

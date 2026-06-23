@@ -83,6 +83,53 @@ export default function Inspector({ selectedAsset, assets, onUpdateProperties, o
     });
   };
 
+  const handleAlign = (type: 'left' | 'hcenter' | 'right' | 'top' | 'vcenter' | 'bottom') => {
+    let newX = selectedAsset.x_pos;
+    let newY = selectedAsset.y_pos;
+
+    const parent = selectedAsset.parent_id ? assets.find(a => a.id === selectedAsset.parent_id) : null;
+
+    const boundary = parent ? {
+      x: parent.x_pos,
+      y: parent.y_pos,
+      w: parent.width,
+      h: parent.height,
+      p: parent.properties?.padding ?? 8
+    } : {
+      x: 0,
+      y: 0,
+      w: 1200,
+      h: 800,
+      p: 20
+    };
+
+    switch (type) {
+      case 'left':
+        newX = boundary.x + boundary.p;
+        break;
+      case 'hcenter':
+        newX = boundary.x + (boundary.w - selectedAsset.width) / 2;
+        break;
+      case 'right':
+        newX = boundary.x + boundary.w - selectedAsset.width - boundary.p;
+        break;
+      case 'top':
+        newY = boundary.y + boundary.p;
+        break;
+      case 'vcenter':
+        newY = boundary.y + (boundary.h - selectedAsset.height) / 2;
+        break;
+      case 'bottom':
+        newY = boundary.y + boundary.h - selectedAsset.height - boundary.p;
+        break;
+    }
+
+    onUpdateProperties({
+      x_pos: Math.round(newX),
+      y_pos: Math.round(newY)
+    });
+  };
+
   const typeIcon = () => {
     switch (selectedAsset.type) {
       case 'frame': return <Frame className="w-3.5 h-3.5" />;
@@ -93,7 +140,9 @@ export default function Inspector({ selectedAsset, assets, onUpdateProperties, o
     }
   };
 
-  const frames = assets.filter(a => a.type === 'frame' && a.id !== selectedAsset.id);
+  const frames = assets.filter(
+    a => ['frame', 'container', 'flexbox', 'grid'].includes(a.type) && a.id !== selectedAsset.id
+  );
 
   return (
     <div className="w-80 bg-white neo-border shadow-[4px_4px_0px_#000] p-4 flex flex-col h-full overflow-y-auto gap-5 select-none scrollbar-none">
@@ -147,12 +196,55 @@ export default function Inspector({ selectedAsset, assets, onUpdateProperties, o
             <Copy className="w-3 h-3" /> Duplicate
           </button>
         )}
-        <button
-          onClick={() => onDeleteAsset(selectedAsset.id)}
-          className="flex-1 py-1 px-2 bg-red-500 hover:bg-red-600 text-white neo-border-sm font-bold text-[9px] uppercase cursor-pointer"
-        >
-          Delete
-        </button>
+      </div>
+
+      {/* Alignment Tools */}
+      <div className="flex flex-col gap-1.5 border-b-2 border-black pb-3">
+        <span className="font-bold text-[10px] text-zinc-500 uppercase tracking-widest">Alignment</span>
+        <div className="grid grid-cols-6 gap-1">
+          <button
+            onClick={() => handleAlign('left')}
+            className="py-1 px-1 bg-white hover:bg-zinc-100 neo-border-sm font-bold text-center text-xs cursor-pointer"
+            title="Align Left"
+          >
+            ⇤
+          </button>
+          <button
+            onClick={() => handleAlign('hcenter')}
+            className="py-1 px-1 bg-white hover:bg-zinc-100 neo-border-sm font-bold text-center text-xs cursor-pointer"
+            title="Align Horizontal Center"
+          >
+            ⇹
+          </button>
+          <button
+            onClick={() => handleAlign('right')}
+            className="py-1 px-1 bg-white hover:bg-zinc-100 neo-border-sm font-bold text-center text-xs cursor-pointer"
+            title="Align Right"
+          >
+            ⇥
+          </button>
+          <button
+            onClick={() => handleAlign('top')}
+            className="py-1 px-1 bg-white hover:bg-zinc-100 neo-border-sm font-bold text-center text-xs cursor-pointer"
+            title="Align Top"
+          >
+            ⤒
+          </button>
+          <button
+            onClick={() => handleAlign('vcenter')}
+            className="py-1 px-1 bg-white hover:bg-zinc-100 neo-border-sm font-bold text-center text-xs cursor-pointer"
+            title="Align Vertical Center"
+          >
+            ⇳
+          </button>
+          <button
+            onClick={() => handleAlign('bottom')}
+            className="py-1 px-1 bg-white hover:bg-zinc-100 neo-border-sm font-bold text-center text-xs cursor-pointer"
+            title="Align Bottom"
+          >
+            ⤓
+          </button>
+        </div>
       </div>
 
       {/* Section: Transform */}
@@ -208,8 +300,8 @@ export default function Inspector({ selectedAsset, assets, onUpdateProperties, o
               className="w-full px-2 py-1 bg-white neo-border-sm font-bold text-xs"
             />
           </div>
-          {/* Corner Radius for rect/frame/sticky */}
-          {(selectedAsset.type === 'rect' || selectedAsset.type === 'frame' || selectedAsset.type === 'sticky') && (
+          {/* Corner Radius for rect/frame/sticky/container/flexbox/grid */}
+          {['rect', 'frame', 'sticky', 'container', 'flexbox', 'grid'].includes(selectedAsset.type) && (
             <div>
               <label className="block text-[10px] font-bold text-zinc-600 uppercase mb-1">Radius</label>
               <input
@@ -427,12 +519,93 @@ export default function Inspector({ selectedAsset, assets, onUpdateProperties, o
         </div>
       </div>
 
-      {/* CONTEXTUAL: Frame Settings */}
-      {selectedAsset.type === 'frame' && (
+      {/* CONTEXTUAL: Frame & Container Settings */}
+      {(selectedAsset.type === 'frame' || selectedAsset.type === 'container') && (
         <div className="border-t-2 border-black pt-4 flex flex-col gap-3">
           <span className="font-bold text-[10px] text-zinc-500 uppercase tracking-widest flex items-center gap-1">
-            <Frame className="w-3.5 h-3.5" /> Frame Settings
+            <Frame className="w-3.5 h-3.5" /> {selectedAsset.type === 'frame' ? 'Frame' : 'Container'} Settings
           </span>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-600 uppercase mb-1">Padding</label>
+              <input
+                type="number"
+                min="0"
+                value={props.padding !== undefined ? props.padding : 8}
+                onChange={(e) => handlePropChange('padding', Number(e.target.value))}
+                className="w-full px-2 py-1 bg-white neo-border-sm font-bold text-xs"
+              />
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={() => handlePropChange('clipContent', !props.clipContent)}
+                className={`w-full py-1.5 neo-border-sm font-bold text-[9px] uppercase cursor-pointer ${
+                  props.clipContent ? 'bg-brand-purple text-white' : 'bg-white hover:bg-zinc-50'
+                }`}
+              >
+                {props.clipContent ? 'Clip ON' : 'Clip OFF'}
+              </button>
+            </div>
+          </div>
+          {/* Show children count */}
+          <div className="text-[10px] font-bold text-zinc-500 uppercase">
+            Children: {assets.filter(a => a.parent_id === selectedAsset.id).length} elements
+          </div>
+        </div>
+      )}
+
+      {/* CONTEXTUAL: Flexbox Settings */}
+      {selectedAsset.type === 'flexbox' && (
+        <div className="border-t-2 border-black pt-4 flex flex-col gap-3">
+          <span className="font-bold text-[10px] text-zinc-500 uppercase tracking-widest flex items-center gap-1">
+            <Frame className="w-3.5 h-3.5" /> Flexbox Settings
+          </span>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-600 uppercase mb-1">Direction</label>
+              <select
+                value={props.flexDirection || 'row'}
+                onChange={(e) => handlePropChange('flexDirection', e.target.value)}
+                className="w-full px-2 py-1 bg-white neo-border-sm font-bold text-xs uppercase"
+              >
+                <option value="row">Row</option>
+                <option value="column">Column</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-600 uppercase mb-1">Align Items</label>
+              <select
+                value={props.alignItems || 'start'}
+                onChange={(e) => handlePropChange('alignItems', e.target.value)}
+                className="w-full px-2 py-1 bg-white neo-border-sm font-bold text-xs uppercase"
+              >
+                <option value="start">Start</option>
+                <option value="center">Center</option>
+                <option value="end">End</option>
+                <option value="stretch">Stretch</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-600 uppercase mb-1">Gap</label>
+              <input
+                type="number"
+                min="0"
+                value={props.flexGap !== undefined ? props.flexGap : 8}
+                onChange={(e) => handlePropChange('flexGap', Number(e.target.value))}
+                className="w-full px-2 py-1 bg-white neo-border-sm font-bold text-xs"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-600 uppercase mb-1">Padding</label>
+              <input
+                type="number"
+                min="0"
+                value={props.padding !== undefined ? props.padding : 8}
+                onChange={(e) => handlePropChange('padding', Number(e.target.value))}
+                className="w-full px-2 py-1 bg-white neo-border-sm font-bold text-xs"
+              />
+            </div>
+          </div>
           <div className="flex gap-2">
             <button
               onClick={() => handlePropChange('clipContent', !props.clipContent)}
@@ -443,7 +616,60 @@ export default function Inspector({ selectedAsset, assets, onUpdateProperties, o
               {props.clipContent ? 'Clip ON (Overflow Hidden)' : 'Clip OFF (Overflow Visible)'}
             </button>
           </div>
-          {/* Show children count */}
+          <div className="text-[10px] font-bold text-zinc-500 uppercase">
+            Children: {assets.filter(a => a.parent_id === selectedAsset.id).length} elements
+          </div>
+        </div>
+      )}
+
+      {/* CONTEXTUAL: Grid Settings */}
+      {selectedAsset.type === 'grid' && (
+        <div className="border-t-2 border-black pt-4 flex flex-col gap-3">
+          <span className="font-bold text-[10px] text-zinc-500 uppercase tracking-widest flex items-center gap-1">
+            <Frame className="w-3.5 h-3.5" /> Grid Settings
+          </span>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-600 uppercase mb-1">Columns</label>
+              <input
+                type="number"
+                min="1"
+                value={props.gridCols || 2}
+                onChange={(e) => handlePropChange('gridCols', Math.max(1, Number(e.target.value)))}
+                className="w-full px-2 py-1 bg-white neo-border-sm font-bold text-xs"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-600 uppercase mb-1">Gap</label>
+              <input
+                type="number"
+                min="0"
+                value={props.gridGap !== undefined ? props.gridGap : 8}
+                onChange={(e) => handlePropChange('gridGap', Number(e.target.value))}
+                className="w-full px-2 py-1 bg-white neo-border-sm font-bold text-xs"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-600 uppercase mb-1">Padding</label>
+              <input
+                type="number"
+                min="0"
+                value={props.padding !== undefined ? props.padding : 8}
+                onChange={(e) => handlePropChange('padding', Number(e.target.value))}
+                className="w-full px-2 py-1 bg-white neo-border-sm font-bold text-xs"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handlePropChange('clipContent', !props.clipContent)}
+              className={`flex-1 py-1.5 neo-border-sm font-bold text-[9px] uppercase cursor-pointer ${
+                props.clipContent ? 'bg-brand-purple text-white' : 'bg-white hover:bg-zinc-50'
+              }`}
+            >
+              {props.clipContent ? 'Clip ON (Overflow Hidden)' : 'Clip OFF (Overflow Visible)'}
+            </button>
+          </div>
           <div className="text-[10px] font-bold text-zinc-500 uppercase">
             Children: {assets.filter(a => a.parent_id === selectedAsset.id).length} elements
           </div>

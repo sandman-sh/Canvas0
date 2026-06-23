@@ -23,6 +23,9 @@ import {
   MessageSquare,
   TrendingUp,
   Hexagon,
+  LayoutGrid,
+  Rows3,
+  AlignVerticalJustifyCenter
 } from 'lucide-react';
 
 interface LayersPanelProps {
@@ -47,6 +50,9 @@ function getTypeIcon(type: string) {
     case 'arrow': return <ArrowUpRight className={cls} />;
     case 'sticky': return <StickyNote className={cls} />;
     case 'comment': return <MessageSquare className={cls} />;
+    case 'container': return <AlignVerticalJustifyCenter className={cls} />;
+    case 'flexbox': return <Rows3 className={cls} />;
+    case 'grid': return <LayoutGrid className={cls} />;
     default: return <PenTool className={cls} />;
   }
 }
@@ -104,8 +110,10 @@ export default function LayersPanel({ assets, selectedAsset, onSelectAsset, onUp
     const dragId = e.dataTransfer.getData('text/plain');
     if (!dragId || dragId === targetAsset.id) return;
 
-    if (targetAsset.type === 'frame') {
-      // Nest inside frame
+    const isTargetContainer = ['frame', 'container', 'flexbox', 'grid'].includes(targetAsset.type);
+
+    if (isTargetContainer) {
+      // Nest inside container
       onUpdateAsset(dragId, { parent_id: targetAsset.id } as any);
     } else {
       // Reorder: swap z_index
@@ -120,7 +128,7 @@ export default function LayersPanel({ assets, selectedAsset, onSelectAsset, onUp
   const renderNode = (node: TreeNode, depth: number = 0) => {
     const { asset, children } = node;
     const isSelected = selectedAsset?.id === asset.id;
-    const isFrame = asset.type === 'frame';
+    const isFrame = ['frame', 'container', 'flexbox', 'grid'].includes(asset.type);
     const isCollapsed = collapsedFrames.has(asset.id);
     const props = asset.properties || {};
 
