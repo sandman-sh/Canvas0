@@ -63,6 +63,37 @@ export default function DesignCanvas({
   const isSyncingRef = useRef<boolean>(false);
   const shaderCanvasesRef = useRef<Map<string, HTMLCanvasElement>>(new Map());
 
+  // Refs to avoid stale closures in Fabric.js event listeners
+  const assetsRef = useRef(assets);
+  const walletAddressRef = useRef(walletAddress);
+  const collaboratorNameRef = useRef(collaboratorName);
+  const activeToolRef = useRef(activeTool);
+  const selectedAssetRef = useRef(selectedAsset);
+  const cursorColorRef = useRef(cursorColor);
+
+  const onSelectAssetRef = useRef(onSelectAsset);
+  const onUpdateAssetRef = useRef(onUpdateAsset);
+  const onAddAssetRef = useRef(onAddAsset);
+  const onDeleteAssetRef = useRef(onDeleteAsset);
+  const onSelectToolRef = useRef(onSelectTool);
+  const onTrackCursorRef = useRef(onTrackCursor);
+  const onZoomChangeRef = useRef(onZoomChange);
+
+  useEffect(() => { assetsRef.current = assets; }, [assets]);
+  useEffect(() => { walletAddressRef.current = walletAddress; }, [walletAddress]);
+  useEffect(() => { collaboratorNameRef.current = collaboratorName; }, [collaboratorName]);
+  useEffect(() => { activeToolRef.current = activeTool; }, [activeTool]);
+  useEffect(() => { selectedAssetRef.current = selectedAsset; }, [selectedAsset]);
+  useEffect(() => { cursorColorRef.current = cursorColor; }, [cursorColor]);
+
+  useEffect(() => { onSelectAssetRef.current = onSelectAsset; }, [onSelectAsset]);
+  useEffect(() => { onUpdateAssetRef.current = onUpdateAsset; }, [onUpdateAsset]);
+  useEffect(() => { onAddAssetRef.current = onAddAsset; }, [onAddAsset]);
+  useEffect(() => { onDeleteAssetRef.current = onDeleteAsset; }, [onDeleteAsset]);
+  useEffect(() => { onSelectToolRef.current = onSelectTool; }, [onSelectTool]);
+  useEffect(() => { onTrackCursorRef.current = onTrackCursor; }, [onTrackCursor]);
+  useEffect(() => { onZoomChangeRef.current = onZoomChange; }, [onZoomChange]);
+
   // Keyboard shortcuts and vector tool nudge behaviors
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -92,7 +123,7 @@ export default function DesignCanvas({
           e.preventDefault();
           activeObjects.forEach((obj: any) => {
             if (obj.data?.id) {
-              onDeleteAsset(obj.data.id);
+              onDeleteAssetRef.current(obj.data.id);
             }
           });
           fCanvas.discardActiveObject();
@@ -122,7 +153,7 @@ export default function DesignCanvas({
             
             // Sync to Supabase
             if (obj.data?.id) {
-              onUpdateAsset(obj.data.id, {
+              onUpdateAssetRef.current(obj.data.id, {
                 x_pos: Math.round(newX),
                 y_pos: Math.round(newY)
               });
@@ -137,21 +168,21 @@ export default function DesignCanvas({
       // 3. Quick tool change hotkeys (V, H, R, O, L, T, P, S)
       if (!e.ctrlKey && !e.metaKey && !e.altKey) {
         const key = e.key.toLowerCase();
-        if (key === 'v') onSelectTool('select');
-        if (key === 'h') onSelectTool('hand');
-        if (key === 'r') onSelectTool('rect');
-        if (key === 'o') onSelectTool('ellipse');
-        if (key === 'l') onSelectTool('line');
-        if (key === 't') onSelectTool('text');
-        if (key === 'p') onSelectTool('pen');
-        if (key === 's') onSelectTool('shader');
-        if (key === 'a') onSelectTool('ai');
+        if (key === 'v') onSelectToolRef.current('select');
+        if (key === 'h') onSelectToolRef.current('hand');
+        if (key === 'r') onSelectToolRef.current('rect');
+        if (key === 'o') onSelectToolRef.current('ellipse');
+        if (key === 'l') onSelectToolRef.current('line');
+        if (key === 't') onSelectToolRef.current('text');
+        if (key === 'p') onSelectToolRef.current('pen');
+        if (key === 's') onSelectToolRef.current('shader');
+        if (key === 'a') onSelectToolRef.current('ai');
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [assets, activeTool, selectedAsset]);
+  }, []);
 
   // Initialize Fabric Canvas
   useEffect(() => {
@@ -171,39 +202,42 @@ export default function DesignCanvas({
 
     fabricCanvasRef.current = fCanvas;
 
-    // Window Resize handler
-    const handleResize = () => {
+    // Resize Observer to handle window resize, sidebar toggle, or inspector open/close
+    const resizeObserver = new ResizeObserver(() => {
       if (!containerRef.current || !fCanvas) return;
       fCanvas.setDimensions({
         width: containerRef.current.clientWidth,
         height: containerRef.current.clientHeight
       });
       fCanvas.renderAll();
-    };
-    window.addEventListener('resize', handleResize);
+    });
+
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
 
     // Event Handlers for Selection
-    fCanvas.on('selection:created', (e) => {
+    fCanvas.on('selection:created', () => {
       if (isSyncingRef.current) return;
-      const activeObj = e.selected?.[0] as any;
+      const activeObj = fCanvas.getActiveObject() as any;
       if (activeObj && activeObj.data?.id) {
-        const found = assets.find((a) => a.id === activeObj.data.id);
-        if (found) onSelectAsset(found);
+        const found = assetsRef.current.find((a) => a.id === activeObj.data.id);
+        if (found) onSelectAssetRef.current(found);
       }
     });
 
-    fCanvas.on('selection:updated', (e) => {
+    fCanvas.on('selection:updated', () => {
       if (isSyncingRef.current) return;
-      const activeObj = e.selected?.[0] as any;
+      const activeObj = fCanvas.getActiveObject() as any;
       if (activeObj && activeObj.data?.id) {
-        const found = assets.find((a) => a.id === activeObj.data.id);
-        if (found) onSelectAsset(found);
+        const found = assetsRef.current.find((a) => a.id === activeObj.data.id);
+        if (found) onSelectAssetRef.current(found);
       }
     });
 
     fCanvas.on('selection:cleared', () => {
       if (isSyncingRef.current) return;
-      onSelectAsset(null);
+      onSelectAssetRef.current(null);
     });
 
     // Object Modified Handler (Sync positions & size back to Supabase)
@@ -225,7 +259,7 @@ export default function DesignCanvas({
         }
       };
 
-      onUpdateAsset(id, updates);
+      onUpdateAssetRef.current(id, updates);
     });
 
     // Cursor tracking / Mouse down drawing / Panning
@@ -236,7 +270,7 @@ export default function DesignCanvas({
     fCanvas.on('mouse:down', (opt) => {
       const evt = opt.e as any;
       // Handle Pan mode
-      if (activeTool === 'hand' || evt.altKey) {
+      if (activeToolRef.current === 'hand' || evt.altKey) {
         isPanning = true;
         fCanvas.selection = false;
         lastPosX = evt.clientX;
@@ -246,11 +280,11 @@ export default function DesignCanvas({
 
       // Add assets on click depending on active tool
       const pointer = fCanvas.getScenePoint(opt.e as any);
-      const creatorShort = walletAddress
-        ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
-        : collaboratorName || 'Guest';
+      const creatorShort = walletAddressRef.current
+        ? `${walletAddressRef.current.slice(0, 6)}...${walletAddressRef.current.slice(-4)}`
+        : collaboratorNameRef.current || 'Guest';
 
-      if (['rect', 'ellipse', 'line', 'polygon', 'text', 'shader'].includes(activeTool)) {
+      if (['rect', 'ellipse', 'line', 'polygon', 'text', 'shader'].includes(activeToolRef.current)) {
         let type: CanvasAsset['type'] = 'rect';
         let content = '';
         let properties: ObjectProperties = {
@@ -264,29 +298,29 @@ export default function DesignCanvas({
           opacity: 1
         };
 
-        if (activeTool === 'rect') {
+        if (activeToolRef.current === 'rect') {
           type = 'rect';
           properties.fill = '#9D4EDD';
-        } else if (activeTool === 'ellipse') {
+        } else if (activeToolRef.current === 'ellipse') {
           type = 'ellipse';
           properties.fill = '#FFD60A';
-        } else if (activeTool === 'line') {
+        } else if (activeToolRef.current === 'line') {
           type = 'line';
           properties.strokeColor = '#FF007F';
           properties.strokeWidth = 3;
           properties.fill = 'transparent';
-        } else if (activeTool === 'polygon') {
+        } else if (activeToolRef.current === 'polygon') {
           type = 'path';
           properties.fill = '#39FF14';
           properties.pathData = 'M 100 0 L 200 57 L 200 143 L 100 200 L 0 143 L 0 57 Z';
-        } else if (activeTool === 'text') {
+        } else if (activeToolRef.current === 'text') {
           type = 'text';
           content = 'Double click to edit';
           properties.fill = '#18181b';
           properties.fontSize = 24;
           properties.fontFamily = 'Inter';
           properties.fontWeight = 'normal';
-        } else if (activeTool === 'shader') {
+        } else if (activeToolRef.current === 'shader') {
           type = 'shader';
           content = 'GLSL Shader Node';
           properties.shaderType = 'fragment';
@@ -300,7 +334,7 @@ void main() {
 }`;
         }
 
-        onAddAsset({
+        onAddAssetRef.current({
           type,
           content,
           x_pos: Math.round(pointer.x - 100),
@@ -308,7 +342,7 @@ void main() {
           width: 200,
           height: 200,
           rotation: 0,
-          z_index: assets.length + 1,
+          z_index: assetsRef.current.length + 1,
           properties,
           creator_id: creatorShort
         }).catch((err) => {
@@ -320,7 +354,7 @@ void main() {
     fCanvas.on('mouse:move', (opt) => {
       // Broadcast cursor pos
       const pointer = fCanvas.getScenePoint(opt.e as any);
-      onTrackCursor(pointer.x, pointer.y);
+      onTrackCursorRef.current(pointer.x, pointer.y);
 
       if (isPanning && opt.e) {
         const e = opt.e as any;
@@ -354,7 +388,7 @@ void main() {
         
         const point = new Point(evt.offsetX, evt.offsetY);
         fCanvas.zoomToPoint(point, newZoom);
-        onZoomChange(newZoom);
+        onZoomChangeRef.current(newZoom);
       } else {
         // Perform Pan action on canvas viewport transform (two-finger scroll or mouse scroll)
         const vpt = fCanvas.viewportTransform;
@@ -369,12 +403,49 @@ void main() {
       opt.e.stopPropagation();
     });
 
+    // Sync completed freehand drawings back to Supabase
+    fCanvas.on('path:created', (opt: any) => {
+      const pathObj = opt.path;
+      if (!pathObj) return;
+
+      const creatorShort = walletAddressRef.current
+        ? `${walletAddressRef.current.slice(0, 6)}...${walletAddressRef.current.slice(-4)}`
+        : collaboratorNameRef.current || 'Guest';
+
+      const svgPathData = pathObj.path
+        .map((step: any) => step.join(' '))
+        .join(' ');
+
+      onAddAssetRef.current({
+        type: 'path',
+        content: 'Freehand Pen Asset',
+        x_pos: Math.round(pathObj.left || 0),
+        y_pos: Math.round(pathObj.top || 0),
+        width: Math.round(pathObj.width || 100),
+        height: Math.round(pathObj.height || 100),
+        rotation: 0,
+        z_index: assetsRef.current.length + 1,
+        properties: {
+          strokeColor: cursorColorRef.current,
+          strokeWidth: 4,
+          opacity: 1,
+          pathData: svgPathData,
+          fill: 'transparent'
+        },
+        creator_id: creatorShort
+      }).then(() => {
+        fCanvas.remove(pathObj);
+      }).catch((err) => {
+        console.error('Failed to save pen path:', err);
+      });
+    });
+
     return () => {
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       fCanvas.dispose();
       fabricCanvasRef.current = null;
     };
-  }, [activeTool, canvasBg]);
+  }, []);
 
   // Handle active tool updates
   useEffect(() => {
@@ -391,49 +462,20 @@ void main() {
       pencil.width = 4;
       pencil.color = cursorColor;
       fCanvas.freeDrawingBrush = pencil;
-      
-      // Sync completed freehand drawings back to Supabase
-      fCanvas.on('path:created', (opt: any) => {
-        const pathObj = opt.path;
-        if (!pathObj) return;
-
-        const creatorShort = walletAddress
-          ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
-          : collaboratorName || 'Guest';
-
-        const svgPathData = pathObj.path
-          .map((step: any) => step.join(' '))
-          .join(' ');
-
-        onAddAsset({
-          type: 'path',
-          content: 'Freehand Pen Asset',
-          x_pos: Math.round(pathObj.left || 0),
-          y_pos: Math.round(pathObj.top || 0),
-          width: Math.round(pathObj.width || 100),
-          height: Math.round(pathObj.height || 100),
-          rotation: 0,
-          z_index: assets.length + 1,
-          properties: {
-            strokeColor: cursorColor,
-            strokeWidth: 4,
-            opacity: 1,
-            pathData: svgPathData,
-            fill: 'transparent'
-          },
-          creator_id: creatorShort
-        }).then(() => {
-          fCanvas.remove(pathObj);
-        }).catch((err) => {
-          console.error('Failed to save pen path:', err);
-        });
-      });
     } else {
       fCanvas.isDrawingMode = false;
       fCanvas.selection = false;
       fCanvas.getObjects().forEach((o: any) => (o.selectable = false));
     }
   }, [activeTool, cursorColor]);
+
+  // Handle programmatic canvas background color changes
+  useEffect(() => {
+    const fCanvas = fabricCanvasRef.current;
+    if (!fCanvas) return;
+    fCanvas.backgroundColor = canvasBg;
+    fCanvas.renderAll();
+  }, [canvasBg]);
 
   // Setup/Render WebGL Shaders
   useEffect(() => {

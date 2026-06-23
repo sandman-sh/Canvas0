@@ -551,7 +551,7 @@ export default function CanvasPage() {
         </div>
 
         {/* Center: Infinite Canvas Workspace */}
-        <div className="flex-1 h-full bg-zinc-50 relative">
+        <div className="flex-1 min-w-0 h-full bg-zinc-50 relative overflow-hidden">
           <DesignCanvas
             assets={assets}
             activeTool={activeTool}
@@ -587,7 +587,7 @@ export default function CanvasPage() {
 
         {/* Right Side: Properties Inspector Panel (only show if selectedAsset is not null) */}
         {selectedAsset && (
-          <div className="relative border-l-2 border-black z-30 h-full">
+          <div className="relative border-l-2 border-black z-30 h-full w-80 flex-shrink-0">
             <Inspector
               selectedAsset={selectedAsset}
               onUpdateProperties={(updates) => {
